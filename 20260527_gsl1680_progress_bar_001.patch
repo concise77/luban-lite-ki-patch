@@ -1,0 +1,77 @@
+diff --git a/application/baremetal/bootloader/cmd/progress_bar.c b/application/baremetal/bootloader/cmd/progress_bar.c
+index dc464cc5..e7b37aca 100644
+--- a/application/baremetal/bootloader/cmd/progress_bar.c
++++ b/application/baremetal/bootloader/cmd/progress_bar.c
+@@ -256,7 +256,7 @@ static void console_set_default_colors(struct aicfb_screeninfo *info)
+ void aicfb_draw_bar(unsigned int value)
+ {
+     struct aicfb_screeninfo info;
+-    unsigned int bar_x, bar_y, width, height;
++    unsigned int bar_x, bar_y, width, height, group_height;
+     unsigned int console_x, console_y;
+     static bool power_on = false;
+ #ifdef AIC_FB_ROTATE_EN
+@@ -265,9 +265,7 @@ void aicfb_draw_bar(unsigned int value)
+     char str[5];
+ 
+     aicfb_probe();
+-
+-    if (aicfb_ioctl(AICFB_GET_SCREENINFO, &info) < 0)
+-        return;
++    aicfb_ioctl(AICFB_GET_SCREENINFO, &info);
+ 
+     if (!power_on) {
+         memset(info.framebuffer, 0x00, info.smem_len);
+@@ -281,8 +279,12 @@ void aicfb_draw_bar(unsigned int value)
+ 
+     width     = SPLIT_WIDTH(info.width);
+     height    = BAR_HEIGHT;
++    group_height = height + 5 + VIDEO_FONT_HEIGHT;
+     bar_x     = (info.width - width) / 2;
+-    bar_y     = 0;
++    if (info.height > group_height)
++        bar_y = (info.height - group_height) / 2;
++    else
++        bar_y = 0;
+     console_x = info.width / 2;
+     console_y = bar_y + BAR_HEIGHT + 5;
+ 
+diff --git a/bsp/peripheral/touch/gsl1680/src/gsl1680.c b/bsp/peripheral/touch/gsl1680/src/gsl1680.c
+index c10fe402..6182ecad 100644
+--- a/bsp/peripheral/touch/gsl1680/src/gsl1680.c
++++ b/bsp/peripheral/touch/gsl1680/src/gsl1680.c
+@@ -153,7 +153,7 @@ static void gsl1680_load_fw(struct rt_i2c_bus_device *bus)
+ static void gsl1680_init(struct rt_i2c_bus_device *bus, rt_base_t pin)
+ {
+     int ret = 0;
+-
++    rt_kprintf("gsl1680 init start=========\n");
+     rt_pin_mode(pin, PIN_MODE_OUTPUT);
+     rt_pin_write(pin, 0);
+     rt_thread_mdelay(20);
+@@ -190,6 +190,7 @@ static rt_size_t gsl1680_readpoint(struct rt_touch_device *touch, void *data, rt
+     temp_data = (struct rt_touch_data *)data;
+ 
+     temp_data->event = RT_TOUCH_EVENT_NONE;
++    temp_data->track_id = 0;
+     temp_data->timestamp = rt_touch_get_ts();
+ 
+     i2c_bus = rt_i2c_bus_device_find(touch->config.dev_name);
+@@ -227,7 +228,7 @@ static rt_size_t gsl1680_readpoint(struct rt_touch_device *touch, void *data, rt
+                 temp_data->y_coordinate = y_save;
+             }
+         }
+-        return RT_EOK;
++        return (temp_data->event == RT_TOUCH_EVENT_UP) ? 1 : 0;
+     }
+     s_count = 0;
+ 
+@@ -243,7 +244,7 @@ static rt_size_t gsl1680_readpoint(struct rt_touch_device *touch, void *data, rt
+     x_save = temp_data->x_coordinate;
+     y_save = temp_data->y_coordinate;
+     // rt_kprintf("x:%ld,y:%ld\n", x_save, y_save);
+-    return RT_EOK;
++    return 1;
+ 
+ }
+ 
